@@ -1,0 +1,2 @@
+# Claude — Arm A (independent)
+Follow AGENT-RUN.md. You have complete freedom to create architecture notes, ADRs, designs, checklists, tests, schemas and other normal artifacts, using the tools ordinarily available to a capable agent. This arm does not use Continuum or inspect the other arm. Think like a senior engineer and accomplished consumer-product designer, not a task executor. Optimize for truly realizing the vision.
