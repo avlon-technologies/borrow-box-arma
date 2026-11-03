@@ -254,8 +254,14 @@ function seedStory(db: DB, uploadDir: string) {
 if (import.meta.main) {
   const dataDir = defaultDataDir();
   if (process.argv.includes('--reset')) {
-    for (const f of ['borrowbox.db', 'borrowbox.db-wal', 'borrowbox.db-shm']) rmSync(join(dataDir, f), { force: true });
-    rmSync(join(dataDir, 'uploads'), { recursive: true, force: true });
+    try {
+      for (const f of ['borrowbox.db', 'borrowbox.db-wal', 'borrowbox.db-shm']) rmSync(join(dataDir, f), { force: true });
+      rmSync(join(dataDir, 'uploads'), { recursive: true, force: true });
+    } catch (err: any) {
+      if (err?.code !== 'EPERM' && err?.code !== 'EBUSY') throw err;
+      console.error('The database is in use — stop the running BorrowBox server (Ctrl+C), then run this again.');
+      process.exit(1);
+    }
   }
   const db = openDatabase(join(dataDir, 'borrowbox.db'));
   const seeded = seed(db, dataDir);

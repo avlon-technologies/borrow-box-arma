@@ -269,7 +269,7 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; }
 .calendar-wd { text-align: center; font-size: 0.75rem; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
 .calendar-cell { display: grid; place-items: center; padding: 2px 0; }
 .calendar-day { width: 100%; max-width: 44px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; font-size: 0.92rem; font-variant-numeric: tabular-nums; cursor: pointer; position: relative; }
-button.calendar-day:hover:not([aria-disabled]) { background: var(--brand-soft); }
+button.calendar-day:hover:not([aria-disabled]):not(.is-start):not(.is-end) { background: var(--brand-soft); }
 .calendar-day[aria-disabled] { cursor: not-allowed; }
 .calendar-day.is-past { color: #b8aca2; }
 .calendar-day.is-today { box-shadow: inset 0 0 0 2px var(--ink-2); font-weight: 700; }
