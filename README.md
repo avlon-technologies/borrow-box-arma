@@ -4,6 +4,8 @@ A warm, trustworthy lending library for friends and small communities. List the 
 
 ![Stack: Node 24 · Express · SQLite (built-in) · React · Vite](https://img.shields.io/badge/stack-Node%2024%20%C2%B7%20SQLite%20%C2%B7%20React-c4553a)
 
+> **Experiment closed (2026-11-03).** This repository is Arm A (without Continuum) of the BorrowBox experiment. It is preserved exactly as evaluated, known defects included. See [`docs/EXPERIMENT-CLOSEOUT.md`](docs/EXPERIMENT-CLOSEOUT.md) and the [final experiment report](https://github.com/avlon-technologies/continuum-architecture/blob/main/experiments/2026-11-02-borrowbox-vision-fidelity/RESULTS.md).
+
 ## Quick start
 
 Requires **Node.js 22.18+ (Node 24 recommended)**. Node runs the TypeScript server directly and includes SQLite, so there are no native modules to compile and no database to install.
