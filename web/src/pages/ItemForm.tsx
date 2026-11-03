@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { api, useAction, useApi, type ApiError } from '../api.ts';
 import { useSession } from '../session.tsx';
@@ -7,7 +7,8 @@ import { useToast } from '../toast.tsx';
 import { BackLink, Button, ErrorState, InlineError, ItemImage, Spinner } from '../components/ui.tsx';
 import { uploadPhoto } from '../components/PhotoPicker.tsx';
 import { NotFound } from './NotFound.tsx';
-import type { ItemDetail } from '../types.ts';
+import { AudienceChoice, CircleMark } from '../components/circles.tsx';
+import type { Audience, ItemDetail } from '../types.ts';
 
 interface Draft {
   title: string;
@@ -18,18 +19,24 @@ interface Draft {
   careNotes: string;
   image: string | null; // upload id or existing url
   imageUrl: string | null; // for preview
+  audience: Audience;
+  circleIds: string[];
 }
 
-const blank: Draft = { title: '', description: '', category: '', maxDays: 7, pickupNotes: '', careNotes: '', image: null, imageUrl: null };
+const blank: Draft = { title: '', description: '', category: '', maxDays: 7, pickupNotes: '', careNotes: '', image: null, imageUrl: null, audience: 'everyone', circleIds: [] };
 
 export function ItemForm() {
   const { id } = useParams();
   const editing = !!id;
   const existing = useApi<ItemDetail>(editing ? `/items/${id}` : null);
-  const { config, user } = useSession();
+  const { config, user, circles } = useSession();
+  const [params] = useSearchParams();
+  const fromCircle = params.get('circle');
   const navigate = useNavigate();
   const toast = useToast();
-  const [draft, setDraft] = useState<Draft>(blank);
+  const [draft, setDraft] = useState<Draft>(() =>
+    fromCircle && !editing ? { ...blank, circleIds: [fromCircle], audience: 'circles' } : blank,
+  );
   const [uploading, setUploading] = useState(false);
   const [photoError, setPhotoError] = useState<{ message: string } | null>(null);
   const action = useAction();
@@ -40,6 +47,7 @@ export function ItemForm() {
       setDraft({
         title: it.title, description: it.description, category: it.category, maxDays: it.maxDays,
         pickupNotes: it.pickupNotes, careNotes: it.careNotes, image: it.imageUrl, imageUrl: it.imageUrl,
+        audience: it.audience, circleIds: it.circles.map((c) => c.id),
       });
   }, [existing.data]);
 
@@ -72,6 +80,8 @@ export function ItemForm() {
     const body = {
       title: draft.title, description: draft.description, category: draft.category, maxDays: draft.maxDays,
       pickupNotes: draft.pickupNotes, careNotes: draft.careNotes, image: draft.image,
+      // Without circles the only choice is opening it to everyone; otherwise sharing stays as it is.
+      ...(circles.length ? { audience: draft.audience, circleIds: draft.circleIds } : draft.audience === 'everyone' ? { audience: 'everyone' } : {}),
     };
     const saved = await action.run((key) =>
       api<ItemDetail>(editing ? `/items/${id}` : '/items', { method: editing ? 'PUT' : 'POST', body, idempotencyKey: key }),
@@ -158,6 +168,49 @@ export function ItemForm() {
               </span>
               <textarea rows={2} maxLength={600} value={draft.careNotes} onChange={(e) => set('careNotes', e.target.value)} placeholder="Anything to know to keep it in good shape" />
             </label>
+          </fieldset>
+          <fieldset className="rules-fields sharing-fields">
+            <legend>Sharing</legend>
+            {circles.length === 0 ? (
+              <p className="muted small">
+                {draft.audience === 'circles'
+                  ? 'This is kept for circle members, but you’re not in a circle right now, so nobody new can ask for it. '
+                  : 'Anyone on BorrowBox can ask for it. Want to keep some things just for friends? '}
+                {draft.audience === 'circles' ? (
+                  <Button type="button" variant="quiet" onClick={() => set('audience', 'everyone')}>Open it to everyone</Button>
+                ) : (
+                  <Link to="/circles/new">Start a circle.</Link>
+                )}
+              </p>
+            ) : (
+              <>
+                <div className="field">
+                  <span className="field-label">
+                    Put it on your circles’ shelves <span className="optional">optional</span>
+                  </span>
+                  <ul className="circle-picks">
+                    {circles.map((c) => (
+                      <li key={c.id}>
+                        <label className={`check circle-pick ${draft.circleIds.includes(c.id) ? 'on' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={draft.circleIds.includes(c.id)}
+                            onChange={(e) =>
+                              set('circleIds', e.target.checked ? [...draft.circleIds, c.id] : draft.circleIds.filter((x) => x !== c.id))
+                            }
+                          />
+                          <CircleMark circle={c} size={26} />
+                          <span>{c.name}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <AudienceChoice circleOnly={draft.audience === 'circles'} onChange={(v) => set('audience', v ? 'circles' : 'everyone')} />
+                {fields.circleIds && <span className="field-error">{fields.circleIds}</span>}
+                {editing && <p className="muted small">Changing this only affects new requests. Anything already asked for or booked carries on.</p>}
+              </>
+            )}
           </fieldset>
           <InlineError error={action.error} />
           <div className="row gap">

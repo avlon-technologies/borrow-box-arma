@@ -1,12 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, setUnauthenticatedHandler, tokenStore } from './api.ts';
 import { setTimeZone } from './format.ts';
-import type { Config, Person } from './types.ts';
+import type { CircleTag, Config, Person } from './types.ts';
+
+type Attention = { borrowing: number; lending: number; circles: number };
 
 interface SessionState {
   user: Person | null;
   config: Config | null;
-  attention: { borrowing: number; lending: number };
+  attention: Attention;
+  /** Circles you're an active member of. */
+  circles: CircleTag[];
   today: string;
   ready: boolean;
   signIn: (userId: string) => Promise<void>;
@@ -19,7 +23,8 @@ const Ctx = createContext<SessionState | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Person | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
-  const [attention, setAttention] = useState({ borrowing: 0, lending: 0 });
+  const [attention, setAttention] = useState<Attention>({ borrowing: 0, lending: 0, circles: 0 });
+  const [circles, setCircles] = useState<CircleTag[]>([]);
   const [today, setToday] = useState('');
   const [ready, setReady] = useState(false);
 
@@ -29,9 +34,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const me = await api<{ user: Person; attention: { borrowing: number; lending: number }; today: string }>('/me');
+      const me = await api<{ user: Person; attention: Attention; circles: CircleTag[]; today: string }>('/me');
       setUser(me.user);
       setAttention(me.attention);
+      setCircles(me.circles);
       setToday(me.today);
     } catch {
       setUser(null);
@@ -82,7 +88,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, config, attention, today, ready, signIn, signOut, refresh }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ user, config, attention, circles, today, ready, signIn, signOut, refresh }}>{children}</Ctx.Provider>
   );
 }
 

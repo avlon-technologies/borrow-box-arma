@@ -1,4 +1,66 @@
-# BorrowBox V1: implementation results
+# BorrowBox: implementation results
+
+## Evolution 1: Lending circles
+
+**Status:** complete. Friends can start a circle, invite people (who accept or decline), contribute items to a shared shelf, and choose for each item whether *anyone* or only *circle members* can ask for it. Leaving or being removed stops new circle-only requests. Pending requests, reservations and loans already made carry on untouched, and each loan records the circle it came through. All V1 behaviour is preserved.
+
+- **Design record:** [docs/adr/0001-lending-circles.md](docs/adr/0001-lending-circles.md). The rules summary is in [docs/DECISIONS.md](docs/DECISIONS.md#lending-circles), and the demo steps are 10–14 in [README.md](README.md).
+- **Session record:** started 2026-11-02 about 22:05 EST, finished 2026-11-03 about 03:30 EST, single autonomous session. One mid-run user message ("thyre both good") needed no change of direction. Continuum was not used, and the other repository was not inspected.
+
+### What changed
+
+| Layer | Change |
+|---|---|
+| Schema | `server/migrations/002-circles.sql` adds `circles`, `circle_members` (lifecycle-guarded), `item_circles`, append-only `circle_events`, `items.audience`, and the immutable `loans.via_circle_id`. Triggers: `loans_circle_access` (INSERT only), `item_circles_owner_is_member`, `circle_members_legal_transition`, `circle_members_end_withdraws_items`, `loans_via_fixed`. |
+| Migrations | `server/db.ts` applies numbered migrations after the V1 baseline, tracked with `PRAGMA user_version` and safe across processes. Existing databases upgrade in place. |
+| Domain | `server/domain/sharing.ts` is the single home of "who can see and ask for what". `server/domain/circles.ts` covers the circle and membership lifecycle, shelves, and the impact preview. `loans.requestLoan` checks access inside its write transaction and records `via_circle_id`. The catalog and item detail are filtered per viewer. |
+| API | `GET/POST /api/circles`, `GET/PUT /api/circles/:id`, invitations, join, decline, leave, remove, make organizer, share and unshare items, and `GET …/members/:userId/impact`. `/api/me` adds invitation counts and your circles. Item create and edit accept `audience` and `circleIds`. `/api/items?circle=` filters by circle. |
+| Web | New *Circles* tab (with an invitation badge), circle list and invitations, start/edit circle, and the circle page (shelf, members, invitations, history, removal and leave previews). Sharing section on the item form. "Who can borrow" on item pages. Circle-only tags on cards. Circle filter on Explore. "Shared through…" plus membership context on loan pages. |
+| Seed | Two circles. *Riverside Makers* (Maya, Sam, Priya) has a circle-only sewing machine reserved by Priya and a game box Theo booked before leaving. *Harbour Lane Street Party* (Theo, Sam) has a pending invitation for Maya. |
+
+### Evidence (all run in this session, Windows 11, Node 24.22.1)
+
+| Check | Result |
+|---|---|
+| `npm run verify` (typecheck → backend tests → build → browser journeys) | **exit 0** |
+| Backend tests | **49 passed** (4 files): the 36 V1 tests plus 13 new ones in `tests/circles.test.ts` |
+| Browser journeys | **12 passed**: the 9 V1 journeys plus 3 new ones in `e2e/circles.spec.ts` |
+| Upgrade of the real V1 database | A copy of `data/borrowbox.db` (user_version 0, 13 loans) opened with the new code → user_version 1, the same 13 loans with the same statuses, all items `audience = everyone` |
+| Visual review | Desktop and 390 px screenshots reviewed. Fixes made: member actions crowding names, a mobile invitation card overflowing, possessives ("Makers’"), and date precision. New screenshots are in `docs/screenshots/` (`circle.png`, `circle-remove-preview.png`, `loan-after-leaving.png`, `item-sharing.png`, `m-circles.png`). |
+
+**What the new tests cover**
+
+- *Lifecycle:* create with invitations; accept, decline, withdraw and re-invite; the exact attributed event history; the last organizer must hand over before leaving; a departing member's items leave the shelf.
+- *Authorization:* former members get `404 not_a_member`. Non-organizers can't remove, promote or edit. Only owners share their own items, and only with circles they're in. The impact preview is organizer-or-self only.
+- *Visibility and access:* circle-only items are absent from outsiders' catalogs and item pages (`item_circle_only`) and refused on request (`403 circle_only`). Open items on a shelf stay public. Circle names don't leak. Circles-only needs at least one circle. Edits that leave out the sharing fields keep the current sharing.
+- *Commitments preserved:* after removal, the member's approved reservation runs its full course (ready → pickup → extension accepted → return → confirmed). Their pending request stays for the owner to approve. New circle-only requests are refused. The seeded member who left can still see their booking through. Limiting an item to circles leaves an outsider's pending request approvable. Rejoining restores access.
+- *Database guards:* circle-only inserts without a valid membership, changing `via_circle_id`, sharing by a non-member, illegal membership transitions, and edits to circle history are all refused by triggers.
+- *Concurrency:* separate OS processes fire five requests spread around a removal by a sixth process. Requests well before it succeed, requests well after are refused as `circle_only`, there is no other kind of failure, and every request that got in is still present and unchanged afterwards. While building this test I found the first version always let the removal win (no real interleaving), so I staggered the timings and checked it was stable over 4 consecutive runs.
+- *Migration:* a database built from the V1 schema with V1 data upgrades in place, and the old loan can still be approved.
+
+**Browser journeys added:** (1) Sam starts a circle and invites Theo, then puts the backpack on the shelf as circle-only. Priya (outsider) no longer finds it, but her existing reservation stands. Theo sees the badge, joins and can ask for it. (2) Maya removes Priya after reading the impact preview. Priya's reservation still says Reserved and explains why. Priya can't ask again and the circle is gone from her list. Maya invites her back, she rejoins and re-shares her game box. (3) Circle pages on a 390 px phone have no sideways scroll.
+
+### Changes to existing tests (and why)
+
+- `tests/conflicts.test.ts` idempotency test: switched from the board-game box to the telescope. The new seed gives the game box a booking on the dates the test used. The assertions are unchanged.
+- `e2e/journeys.spec.ts` "two tabs" test: it looked for the text "Good…" (morning/afternoon/evening), which fails between midnight and 5 am, when the greeting is "Hello". It now checks the greeting element itself. This was an existing flake that showed up because the run crossed midnight.
+
+### Also fixed along the way
+
+- The seed stamped "member since" with the real clock instead of the story clock (it showed "Member since November 2026").
+- Availability copy read "Free until in 2 days". It now reads "Free for 2 days" / "Free today · booked tomorrow".
+
+### Known gaps for circles
+
+- No circle deletion or archiving. A circle whose last member leaves just sits empty, with its history kept.
+- No invite links for people outside the community. Identity is still the demo person picker.
+- One audience per item, not per circle.
+- Invitations appear as an in-app badge only (no email or push, consistent with V1).
+- The catalog visibility check is a per-row `EXISTS`. That's fine at community scale; a large deployment would want a precomputed visibility index.
+
+---
+
+# V1 results
 
 **Status:** complete against VISION.md and ACCEPTANCE.md. All required journeys run end to end in a real browser, between two people, on a persistent database. Known gaps are listed at the bottom.
 

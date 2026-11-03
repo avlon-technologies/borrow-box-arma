@@ -8,6 +8,7 @@ import { AppError, invalid, unauthenticated } from './domain/errors.ts';
 import { listPeople, publicUser } from './domain/users.ts';
 import * as items from './domain/items.ts';
 import * as loans from './domain/loans.ts';
+import * as circles from './domain/circles.ts';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS, LIMITS } from '../shared/constants.ts';
 
 export interface AppOptions {
@@ -146,7 +147,12 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
   });
   r.get('/me', (req, res) => {
     const userId = auth(req);
-    res.json({ user: publicUser(db, userId), attention: loans.attentionCounts(db, userId), today: today() });
+    res.json({
+      user: publicUser(db, userId),
+      attention: { ...loans.attentionCounts(db, userId), circles: circles.pendingInvitations(db, userId) },
+      circles: circles.myCircleTags(db, userId),
+      today: today(),
+    });
   });
 
   // ---- uploads (raw image bytes; the browser resizes before sending)
@@ -179,6 +185,7 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
         category: typeof req.query.category === 'string' ? req.query.category : undefined,
         availableNow: req.query.available === 'now',
         owner: typeof req.query.owner === 'string' ? req.query.owner : undefined,
+        circle: typeof req.query.circle === 'string' ? req.query.circle : undefined,
       }),
     );
   });
@@ -215,6 +222,30 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
   r.post('/extensions/:id/accept', mutation((req, u) => loans.acceptExtension(db, u, req.params.id as string, req.body)));
   r.post('/extensions/:id/decline', mutation((req, u) => loans.declineExtension(db, u, req.params.id as string, req.body)));
   r.post('/extensions/:id/withdraw', mutation((req, u) => loans.withdrawExtension(db, u, req.params.id as string)));
+
+  // ---- circles
+  r.get('/circles', (req, res) => {
+    res.json(circles.listCircles(db, auth(req)));
+  });
+  r.get('/circles/:id', (req, res) => {
+    res.json(circles.getCircle(db, auth(req), req.params.id));
+  });
+  r.get('/circles/:id/members/:userId/impact', (req, res) => {
+    res.json(circles.membershipImpact(db, auth(req), req.params.id, req.params.userId));
+  });
+  const cid = (req: Request) => req.params.id as string;
+  const uid = (req: Request) => req.params.userId as string;
+  r.post('/circles', mutation((req, u) => circles.createCircle(db, u, req.body), 201));
+  r.put('/circles/:id', mutation((req, u) => circles.updateCircle(db, u, cid(req), req.body)));
+  r.post('/circles/:id/invitations', mutation((req, u) => circles.invite(db, u, cid(req), req.body)));
+  r.post('/circles/:id/invitations/:userId/withdraw', mutation((req, u) => circles.withdrawInvite(db, u, cid(req), uid(req))));
+  r.post('/circles/:id/join', mutation((req, u) => circles.respondToInvite(db, u, cid(req), true)));
+  r.post('/circles/:id/decline', mutation((req, u) => circles.respondToInvite(db, u, cid(req), false)));
+  r.post('/circles/:id/leave', mutation((req, u) => circles.leave(db, u, cid(req))));
+  r.post('/circles/:id/members/:userId/remove', mutation((req, u) => circles.removeMember(db, u, cid(req), uid(req))));
+  r.post('/circles/:id/members/:userId/organizer', mutation((req, u) => circles.makeOrganizer(db, u, cid(req), uid(req))));
+  r.post('/circles/:id/items', mutation((req, u) => circles.contribute(db, u, cid(req), req.body)));
+  r.post('/circles/:id/items/:itemId/remove', mutation((req, u) => circles.withdrawItem(db, u, cid(req), req.params.itemId as string)));
 
   r.use((_req, _res, next) => next(new AppError(404, 'not_found', 'No such endpoint.')));
   app.use('/api', r);

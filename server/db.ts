@@ -20,9 +20,29 @@ export function openDatabase(file: string): DB {
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA busy_timeout = 5000;');
   db.exec('PRAGMA foreign_keys = ON;');
+  // schema.sql is the V1 baseline (idempotent); later changes are numbered
+  // migrations, so a database from an older version upgrades in place.
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf8'));
+  migrate(db);
   return db;
 }
+
+/** Schema changes after V1, applied in order. user_version = last applied. */
+const MIGRATIONS = ['002-circles.sql'];
+
+function migrate(db: DB) {
+  const version = () => (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  if (version() >= MIGRATIONS.length) return;
+  // Take the write lock, then re-check: another process may have migrated first.
+  transaction(db, () => {
+    for (let v = version(); v < MIGRATIONS.length; v++) {
+      db.exec(readFileSync(join(here, 'migrations', MIGRATIONS[v]), 'utf8'));
+      db.exec(`PRAGMA user_version = ${v + 1}`);
+    }
+  });
+}
+
+export const SCHEMA_VERSION = MIGRATIONS.length;
 
 /**
  * Run `fn` inside a write transaction. BEGIN IMMEDIATE takes the write lock up

@@ -6,6 +6,7 @@ import { CONDITIONS, HOLDING_STATUSES, LIMITS, OPEN_STATUSES, type LoanStatus } 
 import { AppError, conflict, forbidden, fromDbError, invalid, notFound } from './errors.ts';
 import { loadItem, parse } from './items.ts';
 import { publicUser } from './users.ts';
+import { borrowAccess, membership, toTag } from './sharing.ts';
 
 const holding = HOLDING_STATUSES.map((s) => `'${s}'`).join(',');
 const open = OPEN_STATUSES.map((s) => `'${s}'`).join(',');
@@ -171,6 +172,10 @@ export function requestLoan(db: DB, actorId: string, input: unknown) {
     const item = loadItem(db, data.itemId);
     if (item.owner_id === actorId) throw forbidden('This is your own item — no need to borrow it!');
     if (item.hidden) throw conflict('item_hidden', 'The owner has paused lending this item, so it can’t be requested right now.');
+    // Checked inside the write transaction, so a membership change can't slip
+    // between the check and the insert. The loans_circle_access trigger backs this up.
+    const access = borrowAccess(db, actorId, item);
+    if (!access.ok) throw new AppError(403, 'circle_only', access.reason);
     const days = rangeLength(data.startDate, data.endDate);
     if (days > item.max_days)
       throw invalid(`This item can be borrowed for up to ${item.max_days} day${item.max_days === 1 ? '' : 's'} at a time.`);
@@ -195,11 +200,14 @@ export function requestLoan(db: DB, actorId: string, input: unknown) {
     const at = nowIso();
     run(
       db,
-      `INSERT INTO loans (id, item_id, borrower_id, owner_id, status, start_date, end_date, original_end_date, note, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?)`,
-      id, item.id, actorId, item.owner_id, data.startDate, data.endDate, data.endDate, data.note, at, at,
+      `INSERT INTO loans (id, item_id, borrower_id, owner_id, status, start_date, end_date, original_end_date, note, via_circle_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?)`,
+      id, item.id, actorId, item.owner_id, data.startDate, data.endDate, data.endDate, data.note, access.via?.id ?? null, at, at,
     );
-    logEvent(db, id, actorId, 'requested', { startDate: data.startDate, endDate: data.endDate, note: data.note });
+    logEvent(db, id, actorId, 'requested', {
+      startDate: data.startDate, endDate: data.endDate, note: data.note,
+      ...(access.via ? { viaCircle: access.via.name } : {}),
+    });
   });
   return getLoan(db, actorId, id);
 }
@@ -562,6 +570,7 @@ function itemCard(db: DB, itemId: string) {
     imageUrl: item.image_url,
     category: item.category,
     hidden: !!item.hidden,
+    audience: item.audience,
     pickupNotes: item.pickup_notes,
     careNotes: item.care_notes,
     maxDays: item.max_days,
@@ -597,6 +606,32 @@ function loanCard(db: DB, loan: any, viewerId: string) {
       : null,
     disputed,
     needsAttention: needsAttention(loan, role, !!pendingExt),
+    via: viaCircle(db, loan),
+  };
+}
+
+/**
+ * The circle that let the borrower ask, and whether they still belong to it.
+ * Purely informational: a loan carries on whatever happens to the membership.
+ */
+function viaCircle(db: DB, loan: any) {
+  if (!loan.via_circle_id) return null;
+  const circle = one<any>(db, `SELECT id, name, hue FROM circles WHERE id = ?`, loan.via_circle_id);
+  if (!circle) return null;
+  const stillMember = membership(db, circle.id, loan.borrower_id)?.status === 'active';
+  const ended = stillMember
+    ? null
+    : one<any>(
+        db,
+        `SELECT type, created_at FROM circle_events WHERE circle_id = ? AND subject_id = ? AND type IN ('left','removed')
+          ORDER BY seq DESC LIMIT 1`,
+        circle.id, loan.borrower_id,
+      );
+  return {
+    ...toTag(circle),
+    borrowerStillMember: stillMember,
+    /** How and when the borrower stopped being a member, if they have. */
+    borrowerLeft: ended ? { how: ended.type as 'left' | 'removed', at: ended.created_at as string } : null,
   };
 }
 

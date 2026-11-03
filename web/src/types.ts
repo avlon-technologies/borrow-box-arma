@@ -11,6 +11,14 @@ export interface Person {
   memberSince: string;
 }
 
+export interface CircleTag {
+  id: string;
+  name: string;
+  hue: number;
+}
+
+export type Audience = 'everyone' | 'circles';
+
 export interface Availability {
   state: 'available' | 'out';
   backOn: string | null;
@@ -29,6 +37,8 @@ export interface ItemSummary {
   owner: Person;
   isMine: boolean;
   availability: Availability;
+  audience: Audience;
+  circles: CircleTag[];
 }
 
 export interface OwnItem extends ItemSummary {
@@ -53,6 +63,7 @@ export interface ItemDetail extends ItemSummary {
   myOpenLoans: { id: string; status: LoanStatus; startDate: string; endDate: string }[];
   pendingRequests: { id: string; borrower: Person; startDate: string; endDate: string; note: string; createdAt: string }[];
   canRequest: { ok: boolean; reason?: string };
+  viaCircle: CircleTag | null;
 }
 
 export interface LoanCard {
@@ -67,7 +78,7 @@ export interface LoanCard {
   updatedAt: string;
   pickedUpAt: string | null;
   returnedAt: string | null;
-  item: { id: string; title: string; imageUrl: string | null; category: string; hidden: boolean; pickupNotes: string; careNotes: string; maxDays: number };
+  item: { id: string; title: string; imageUrl: string | null; category: string; hidden: boolean; audience: Audience; pickupNotes: string; careNotes: string; maxDays: number };
   owner: Person;
   borrower: Person;
   overdue: boolean;
@@ -78,6 +89,8 @@ export interface LoanCard {
   pendingExtension: { id: string; newEndDate: string; fromEndDate: string; note: string; createdAt: string } | null;
   disputed: boolean;
   needsAttention: boolean;
+  /** The circle that let the borrower ask, if the item is circle-only. */
+  via: (CircleTag & { borrowerStillMember: boolean; borrowerLeft: { how: 'left' | 'removed'; at: string } | null }) | null;
 }
 
 export interface Action {
@@ -123,4 +136,53 @@ export interface Config {
   categories: string[];
   conditions: { value: string; label: string }[];
   limits: { noteLength: number; photosPerReport: number; uploadBytes: number };
+}
+
+export interface CircleSummary extends CircleTag {
+  description: string;
+  createdAt: string;
+  members: Person[];
+  memberCount: number;
+  itemCount: number;
+  myRole: 'organizer' | 'member' | null;
+}
+
+export interface CircleInvitation extends CircleSummary {
+  invitedBy: Person | null;
+  invitedAt: string;
+}
+
+export interface CircleMember {
+  person: Person;
+  status: 'active' | 'invited';
+  role: 'organizer' | 'member';
+  since: string;
+  invitedBy: Person | null;
+  items: number;
+}
+
+export interface CircleEvent {
+  seq: number;
+  type: string;
+  actor: Person | null;
+  subject: Person | null;
+  detail: Record<string, any>;
+  at: string;
+}
+
+export interface CircleDetail extends Omit<CircleSummary, 'members'> {
+  me: { status: 'active' | 'invited'; role: 'organizer' | 'member' | null; invitedBy: Person | null };
+  members: CircleMember[];
+  invited: CircleMember[];
+  shelf: ItemSummary[];
+  shelfPreview: string[];
+  activity: CircleEvent[];
+}
+
+export interface MembershipImpact {
+  person: Person;
+  borrowing: { loanId: string; title: string; status: LoanStatus; startDate: string; endDate: string; owner: Person; commitment: boolean }[];
+  lending: { loanId: string; title: string; status: LoanStatus; startDate: string; endDate: string; borrower: Person }[];
+  items: { id: string; title: string; becomesUnshared: boolean }[];
+  lastOrganizer: boolean;
 }

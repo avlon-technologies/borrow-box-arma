@@ -35,6 +35,12 @@ export function fromDbError(err: unknown): unknown {
     return conflict('illegal_transition', 'That step isn’t possible any more — things may have moved on. Refresh to see the latest.');
   if (msg.includes('APPEND_ONLY'))
     return conflict('append_only', 'History can’t be changed once it’s recorded.');
+  if (msg.includes('CIRCLE_ONLY'))
+    return new AppError(403, 'circle_only', 'This item is shared only within a circle you’re not part of right now.');
+  if (msg.includes('NOT_A_MEMBER'))
+    return new AppError(403, 'not_a_member', 'Only members can share things with this circle.');
+  if (msg.includes('IMMUTABLE_FIELD'))
+    return conflict('immutable_field', 'That part of the record can’t be changed.');
   if (msg.includes('UNIQUE constraint failed: extensions.loan_id'))
     return conflict('extension_pending', 'There’s already an extension waiting for an answer.');
   return err;

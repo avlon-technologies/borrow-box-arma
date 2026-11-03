@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CalendarDays, Clock, Eye, EyeOff, Hand, MapPin, Pencil, Sparkles } from 'lucide-react';
+import { CalendarDays, Clock, Eye, EyeOff, Globe, Hand, Lock, MapPin, Pencil, Sparkles, TriangleAlert } from 'lucide-react';
+import { CircleChip } from '../components/circles.tsx';
 import { api, useAction, useApi } from '../api.ts';
 import { useSession } from '../session.tsx';
 import { useToast } from '../toast.tsx';
@@ -63,6 +64,7 @@ export function ItemPage() {
                   <strong>Up to {plural(item.maxDays, 'day')} at a time</strong>
                 </span>
               </li>
+              <SharingRule item={item} />
               {item.pickupNotes && (
                 <li>
                   <Hand size={18} aria-hidden />
@@ -134,7 +136,13 @@ function BorrowPanel({ item, blocked }: { item: ItemDetail; blocked: { startDate
       </div>
       {!item.canRequest.ok && (
         <p className="notice">
-          <EyeOff size={18} aria-hidden /> {item.canRequest.reason} Existing bookings still go ahead.
+          {item.hidden ? <EyeOff size={18} aria-hidden /> : <Lock size={18} aria-hidden />} {item.canRequest.reason}{' '}
+          {item.myOpenLoans.length > 0 ? 'Anything you’ve already arranged still goes ahead.' : 'Existing bookings still go ahead.'}
+        </p>
+      )}
+      {item.canRequest.ok && item.viaCircle && (
+        <p className="notice circle-notice">
+          <Lock size={18} aria-hidden /> Kept for circle members — you can ask because you’re in {item.viaCircle.name}.
         </p>
       )}
       <div className="request-grid">
@@ -218,6 +226,7 @@ function OwnerPanel({ item, onChange, blocked }: { item: ItemDetail; onChange: (
         </div>
       </div>
       <InlineError error={action.error} />
+      <OwnerSharing item={item} />
       <p className="muted small">
         {item.hidden
           ? 'Hidden: nobody new can request it. Reservations already made carry on as planned.'
@@ -268,4 +277,52 @@ function OwnerPanel({ item, onChange, blocked }: { item: ItemDetail; onChange: (
       </div>
     </section>
   );
+}
+
+/** Who can ask for this item, in the borrowing rules. */
+function SharingRule({ item }: { item: ItemDetail }) {
+  const circles = item.circles;
+  if (item.audience === 'everyone')
+    return (
+      <li>
+        <Globe size={18} aria-hidden />
+        <span>
+          <strong>Anyone can ask</strong>
+          {circles.length > 0 && (
+            <span className="chip-row">
+              Also on the shelf of {circles.map((c) => <CircleChip key={c.id} circle={c} />)}
+            </span>
+          )}
+        </span>
+      </li>
+    );
+  return (
+    <li>
+      <Lock size={18} aria-hidden />
+      <span>
+        <strong>Circle members only</strong>
+        {circles.length > 0 ? (
+          <span className="chip-row">
+            {item.isMine ? 'Shared with' : 'Shared in'} {circles.map((c) => <CircleChip key={c.id} circle={c} />)}
+          </span>
+        ) : (
+          <span className="muted">{item.isMine ? 'It isn’t in any circle right now.' : 'Kept for the owner’s circles.'}</span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function OwnerSharing({ item }: { item: ItemDetail }) {
+  if (item.audience === 'circles' && item.circles.length === 0)
+    return (
+      <p className="notice warn">
+        <TriangleAlert size={18} aria-hidden />
+        <span>
+          This is set to circle members only, but it isn’t on any circle’s shelf — so nobody new can ask for it. Existing
+          bookings are unaffected. <Link to={`/items/${item.id}/edit`}>Choose who can borrow it</Link>.
+        </span>
+      </p>
+    );
+  return null;
 }

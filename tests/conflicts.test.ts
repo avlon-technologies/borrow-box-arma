@@ -219,7 +219,7 @@ describe('double submission', () => {
     pinClock();
     h = await makeHarness();
     const sam = await h.as('sam');
-    const body = { itemId: 'item-games', startDate: addDays(TODAY, 2), endDate: addDays(TODAY, 4) };
+    const body = { itemId: 'item-telescope', startDate: addDays(TODAY, 2), endDate: addDays(TODAY, 4) };
     const [a, b] = await Promise.all([
       sam.post('/api/loans').set('Idempotency-Key', 'k-123').send(body),
       sam.post('/api/loans').set('Idempotency-Key', 'k-123').send(body),
@@ -227,7 +227,7 @@ describe('double submission', () => {
     expect(a.status).toBe(201);
     expect(b.status).toBe(201);
     expect(a.body.id).toBe(b.body.id);
-    const count = h.db.prepare(`SELECT count(*) n FROM loans WHERE item_id = 'item-games'`).get() as any;
+    const count = h.db.prepare(`SELECT count(*) n FROM loans WHERE item_id = 'item-telescope'`).get() as any;
     expect(count.n).toBe(1);
     // Without the key, a second attempt is still caught as a duplicate.
     expect((await sam.post('/api/loans').send(body)).status).toBe(409);

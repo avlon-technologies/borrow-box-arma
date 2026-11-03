@@ -1,6 +1,6 @@
 # BorrowBox
 
-A warm, trustworthy lending library for friends and small communities. List the things you're happy to lend, browse what neighbours share, ask for dates, and coordinate the handoff, use and return. Every screen tells you the next step.
+A warm, trustworthy lending library for friends and small communities. List the things you're happy to lend, browse what neighbours share, ask for dates, and coordinate the handoff, use and return. Start a **lending circle** with friends to share a shelf and keep some things just between you. Every screen tells you the next step.
 
 ![Stack: Node 24 · Express · SQLite (built-in) · React · Vite](https://img.shields.io/badge/stack-Node%2024%20%C2%B7%20SQLite%20%C2%B7%20React-c4553a)
 
@@ -34,7 +34,7 @@ Environment: `PORT` (default 5174), `BORROWBOX_DATA_DIR` (default `./data`), `CO
 
 **Each browser tab can be a different person.** Open two tabs, choose **Sam** in one and **Maya** in the other, and switch at any time from the avatar menu (top right). Your identity survives a refresh.
 
-The seeded community (4 people, 14 items, 13 loans in different states) is set up so that every journey can be tried right away:
+The seeded community (4 people, 14 items, 15 loans in different states, 2 lending circles) is set up so that every journey can be tried right away:
 
 1. **Browse and search** (anyone): Explore shows the catalog. Search "tent" or a neighbour's name, filter by category or "Available today", and open an item to see its owner, rules and availability calendar.
 2. **Request → approve** (Sam, then Priya): as Sam, open *Tabletop telescope*, pick dates on the calendar, add a note and send. Refresh: the request is still waiting. Switch to Priya → *Lending* → approve or decline.
@@ -46,12 +46,21 @@ The seeded community (4 people, 14 items, 13 loans in different states) is set u
 8. **Hide an item** (Theo): the *Pressure washer* is hidden. It's missing from the catalog and refuses new requests, but Priya's reservation still stands. Owners can hide or show any item from its page.
 9. **List and edit** (anyone): *Share something* adds an item with a photo and borrowing rules. Use *Edit* on your own item's page.
 
+### Lending circles
+
+10. **Join a circle** (Maya): the *Circles* tab has a badge. Theo has invited Maya to *Harbour Lane Street Party*. Take a look at the preview, then join. Its circle-only *Garden party set* now appears in Maya's catalog (use the *Harbour Lane Street Party* filter on Explore).
+11. **Start a circle and keep things just for it** (Sam, then Theo and Priya): *Circles → Start a circle*, invite Theo, then *Share something you own* and pick *Circle members only*. Priya (not invited) can't find that item any more, though any booking she already has is untouched. Theo joins and can ask for it.
+12. **Someone who left keeps their booking** (Theo, Priya): Theo booked Priya's circle-only *Board game night box* through *Riverside Makers*, then left the circle. His booking still says *Reserved*, with "Shared through Riverside Makers · you left the circle… so it carries on as agreed". The sewing machine, which is circle-only, no longer appears for him.
+13. **Remove a member** (Maya): open *Riverside Makers* and choose *Remove* next to Priya. A preview lists what stays the same (Priya's sewing-machine booking, Theo's game-box booking) and what changes (no new circle-only requests, and her game box leaves the shelf). Confirm, then as Priya open *Borrowing → Sewing machine*: still reserved, and it explains why. Maya can invite her back any time.
+14. **Choose who can borrow** (any owner): on *Edit*, the *Sharing* section puts an item on your circles' shelves and chooses *Anyone on BorrowBox* or *Circle members only*.
+
 ## How it's built
 
 ```
 server/            Express API + domain rules (TypeScript, run directly by Node)
   schema.sql       tables and the integrity guards (triggers)
-  domain/          items, loans (state machine, extensions, evidence), users
+  domain/          items, loans (state machine, extensions, evidence), users,
+                   circles (membership lifecycle), sharing (who can see and ask for what)
   app.ts           HTTP layer: auth, idempotency, uploads, errors
   seed.ts          demo community, created through the real domain functions
 shared/            vocabulary shared by server and web
@@ -59,6 +68,8 @@ web/src/           React app (pages, components, human-language copy in loanCopy
 tests/             Vitest API/domain/concurrency tests
 e2e/               Playwright two-person browser journeys
 docs/DECISIONS.md  product and engineering decisions, rules and policies
+docs/adr/          architecture decision records (0001: lending circles)
+server/migrations/ numbered schema migrations (PRAGMA user_version)
 ```
 
 The key ideas are below. More detail is in [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -68,6 +79,7 @@ The key ideas are below. More detail is in [docs/DECISIONS.md](docs/DECISIONS.md
 - **No double submissions.** Every write carries an `Idempotency-Key`, so a double-click or retry replays the first answer instead of acting twice. Buttons also lock while a write is in flight.
 - **The server decides what you can do.** Each loan comes with its available actions and the reason any action is blocked ("Overlaps Priya's booking (Nov 7–10)"), so the UI never offers something the server will refuse.
 - **Dates:** whole calendar days, inclusive, in the community time zone. See below.
+- **Circles gate asking, not having.** Circle membership is checked when someone asks to borrow, inside the same write transaction as the request, and a trigger backs it up. After that, a loan belongs to its owner and borrower, so leaving or being removed from a circle never cancels anything already asked for or booked. Each loan records the circle it came through. See [docs/adr/0001-lending-circles.md](docs/adr/0001-lending-circles.md).
 
 ### Date and time-zone policy
 
@@ -83,4 +95,4 @@ Running `npm run seed` gives you the same community every time, with dates relat
 
 ## Not included (by design for V1)
 
-Real accounts and passwords: identity is a demo person picker, though every action is still authorized on the server against that identity. Payments, deposits, insurance, ratings or reputation scores, geotracking, push notifications, native apps and group lending circles are all out of scope by design, as the vision specifies. Implementation results and known gaps are in [IMPLEMENTATION-RESULTS.md](IMPLEMENTATION-RESULTS.md).
+Real accounts and passwords: identity is a demo person picker, though every action is still authorized on the server against that identity. Payments, deposits, insurance, ratings or reputation scores, geotracking, push notifications and native apps are out of scope by design, as the vision specifies. Lending circles were out of scope for V1 and have since been added as the first evolution of the product. Implementation results and known gaps are in [IMPLEMENTATION-RESULTS.md](IMPLEMENTATION-RESULTS.md).

@@ -129,7 +129,7 @@ export function stepIndex(status: string): number {
 export function eventText(type: string, detail: Record<string, any>, actorName: string, loan: LoanCard): string {
   switch (type) {
     case 'requested':
-      return `${actorName} asked to borrow it for ${formatRange(detail.startDate, detail.endDate)}`;
+      return `${actorName} asked to borrow it for ${formatRange(detail.startDate, detail.endDate)}${detail.viaCircle ? ` through ${detail.viaCircle}` : ''}`;
     case 'approved':
       return `${actorName} approved the request`;
     case 'declined':

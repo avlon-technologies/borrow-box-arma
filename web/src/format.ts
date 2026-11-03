@@ -83,6 +83,16 @@ export function formatMoment(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** "Nov 1" — the community-time calendar day of a moment. */
+export function onDay(iso: string): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: communityTz, month: 'short', day: 'numeric' }).format(new Date(iso));
+}
+
+/** "Sam’s", "Riverside Makers’". */
+export function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}’` : `${name}’s`;
+}
+
 export function greeting(): string {
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: communityTz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
   if (hour < 5) return 'Hello';

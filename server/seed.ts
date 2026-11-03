@@ -8,8 +8,9 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { type DB, defaultDataDir, openDatabase, run, one, ROOT } from './db.ts';
-import { addDays, getClock, setClock, today } from './dates.ts';
+import { addDays, getClock, now, setClock, today } from './dates.ts';
 import * as L from './domain/loans.ts';
+import * as C from './domain/circles.ts';
 
 const PHOTO_DIR = join(ROOT, 'server', 'seed', 'photos');
 
@@ -124,7 +125,7 @@ function seedStory(db: DB, uploadDir: string) {
   const d = (n: number) => addDays(T, n);
 
   at(-120);
-  const joined = new Date().toISOString();
+  const joined = now().toISOString();
   for (const p of people) {
     run(db, `INSERT INTO users (id, name, first_name, neighbourhood, bio, avatar_hue, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       p.id, p.name, p.first, p.hood, p.bio, p.hue, joined);
@@ -147,6 +148,32 @@ function seedStory(db: DB, uploadDir: string) {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       id, it.owner, it.title, it.description, it.category, imageUrl, it.maxDays, it.pickup, it.care, created, created);
   });
+
+  // Lending circles. Riverside Makers: Maya organizes, Sam and Priya are in
+  // (Theo was too, see 12). Harbour Lane Street Party: Theo organizes, Sam is in.
+  at(-60);
+  const riverside = C.createCircle(db, 'maya', {
+    name: 'Riverside Makers', hue: 18, inviteIds: ['sam', 'priya', 'theo'],
+    description: 'Tools, craft gear and good company around Riverside. If you borrow the sewing machine, bring it back threaded.',
+  }).id;
+  at(-59);
+  for (const who of ['sam', 'priya', 'theo']) C.respondToInvite(db, who, riverside, true);
+  at(-55);
+  const harbour = C.createCircle(db, 'theo', {
+    name: 'Harbour Lane Street Party', hue: 205, inviteIds: ['sam'],
+    description: 'Everything it takes to throw the summer street party — and the clean-up after.',
+  }).id;
+  at(-54);
+  C.respondToInvite(db, 'sam', harbour, true);
+  const share = (owner: string, circle: string, item: string, audience: 'everyone' | 'circles') =>
+    C.contribute(db, owner, circle, { itemId: itemId[item], audience });
+  share('maya', riverside, 'sewing', 'circles');
+  share('maya', riverside, 'ladder', 'everyone');
+  share('sam', riverside, 'tent', 'everyone');
+  at(-53);
+  share('priya', riverside, 'games', 'circles');
+  share('theo', harbour, 'tables', 'circles');
+  share('sam', harbour, 'trailer', 'everyone');
 
   const req = (who: string, item: string, start: number, end: number, note = '') =>
     L.requestLoan(db, who, { itemId: itemId[item], startDate: d(start), endDate: d(end), note }).id;
@@ -249,6 +276,23 @@ function seedStory(db: DB, uploadDir: string) {
   id = req('priya', 'backpack', 12, 20, 'Hiking the Bruce Trail!');
   L.approve(db, 'sam', id, {});
 
+  // 12. Theo booked Priya's circle-only game box through Riverside Makers, then
+  //     left the circle. His booking still stands; he just can't ask for new
+  //     circle-only things there.
+  at(-3);
+  id = req('theo', 'games', 2, 5, 'Family games night with the cousins!');
+  L.approve(db, 'priya', id, { note: 'The cousins will love Codenames.' });
+  at(-2, 18);
+  C.leave(db, 'theo', riverside);
+
+  // 13. Priya reserved Maya's circle-only sewing machine through the circle.
+  at(-1, 15);
+  id = req('priya', 'sewing', 6, 9, 'Sewing a costume for the school play.');
+  L.approve(db, 'maya', id, { note: 'Of course — new needles are in the drawer.' });
+
+  // 14. Theo invited Maya to the street party circle; she hasn't answered yet.
+  at(-1, 19);
+  C.invite(db, 'theo', harbour, { userId: 'maya' });
 }
 
 if (import.meta.main) {

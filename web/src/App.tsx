@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Compass, HandHeart, LogOut, Package, Users } from 'lucide-react';
+import { ArrowLeftRight, CircleDot, Compass, HandHeart, LogOut, Package, Users } from 'lucide-react';
 import { useSession } from './session.tsx';
 import { Avatar, Spinner } from './components/ui.tsx';
 import { Welcome } from './pages/Welcome.tsx';
@@ -12,6 +12,9 @@ import { Lending } from './pages/Lending.tsx';
 import { LoanPage } from './pages/LoanPage.tsx';
 import { NotFound } from './pages/NotFound.tsx';
 import { About } from './pages/About.tsx';
+import { Circles } from './pages/Circles.tsx';
+import { CircleForm } from './pages/CircleForm.tsx';
+import { CirclePage } from './pages/CirclePage.tsx';
 import { api } from './api.ts';
 import type { Person } from './types.ts';
 
@@ -128,6 +131,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: '/', label: 'Explore', icon: Compass, end: true, n: 0 },
     { to: '/borrowing', label: 'Borrowing', icon: HandHeart, n: attention.borrowing },
     { to: '/lending', label: 'Lending', icon: Package, n: attention.lending },
+    { to: '/circles', label: 'Circles', icon: CircleDot, n: attention.circles },
   ];
   return (
     <>
@@ -141,7 +145,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             {nav.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} className="top-nav-link">
                 {n.label}
-                <Badge n={n.n} label="things need you" />
+                <Badge n={n.n} label={n.to === '/circles' ? 'invitations' : 'things need you'} />
               </NavLink>
             ))}
           </nav>
@@ -160,7 +164,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NavLink key={n.to} to={n.to} end={n.end} className="bottom-nav-link">
             <span className="bottom-nav-icon">
               <n.icon size={22} aria-hidden />
-              <Badge n={n.n} label="things need you" />
+              <Badge n={n.n} label={n.to === '/circles' ? 'invitations' : 'things need you'} />
             </span>
             <span>{n.label}</span>
           </NavLink>
@@ -199,6 +203,10 @@ export function App() {
         <Route path="/borrowing" element={<Borrowing />} />
         <Route path="/lending" element={<Lending />} />
         <Route path="/loans/:id" element={<LoanPage />} />
+        <Route path="/circles" element={<Circles />} />
+        <Route path="/circles/new" element={<CircleForm />} />
+        <Route path="/circles/:id" element={<CirclePage />} />
+        <Route path="/circles/:id/edit" element={<CircleForm />} />
         <Route path="/about" element={<About />} />
         <Route path="/welcome" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFound />} />

@@ -68,6 +68,32 @@ V1 uses a **demo person picker** instead of passwords. The vision asks for seede
 
 Hiding sets `items.hidden`. The item leaves the catalog and new requests are refused (`409 item_hidden`). Existing requests, reservations and loans carry on untouched. The owner can still approve requests that were already pending. Anyone with a loan on the item can still open its page. Others see a gentle "This item is resting" message.
 
+## Lending circles
+
+The full reasoning is in [adr/0001-lending-circles.md](adr/0001-lending-circles.md). In short:
+
+- A **circle** is a small group with a shared shelf. You join by accepting an invitation. Any member can invite. Organizers edit the circle, remove members and make others organizers. The last organizer must hand over before leaving.
+- Each item has an **audience**: *anyone* (V1 behaviour) or *circle members only*. Separately, it can sit on any number of its owner's circles' shelves.
+- **Access is checked when someone asks, never afterwards.** Leaving, being removed, an item being limited to circles, or an item coming off a shelf all stop *new* requests. Pending requests stay with the owner to decide. Reservations and loans carry on untouched. This is the same rule as hiding.
+- Each loan records the circle that let the borrower ask (`via_circle_id`, which never changes). Loan pages show it, and explain when the borrower has since left.
+- The rule is enforced in the domain (`server/domain/sharing.ts`, inside the request's write transaction), by triggers (`loans_circle_access` and others in `server/migrations/002-circles.sql`), and in the UI. Removing someone or leaving shows a preview of what stays the same and what changes.
+- Circle history (`circle_events`) is append-only, like loan history.
+
+| Circle action | Who |
+|---|---|
+| create | anyone (becomes organizer) |
+| invite | any active member |
+| withdraw invitation | whoever sent it, or an organizer |
+| accept / decline | the invited person |
+| edit name, description, colour | organizers |
+| remove a member, make organizer | organizers |
+| leave | any member (the last organizer hands over first, unless alone) |
+| share or unshare an item | the item's owner, while an active member |
+
+## Schema changes
+
+`server/schema.sql` is the V1 baseline. Later changes are numbered files in `server/migrations/`, applied in order by `server/db.ts` and tracked with `PRAGMA user_version`, so existing databases upgrade in place. To change the schema, add a new migration file and append it to `MIGRATIONS`. Never edit a migration that has already shipped.
+
 ## Photos
 
 The browser shrinks photos to at most 1600px (JPEG) before upload, and the raw bytes are POSTed to `/api/uploads`. The server checks the file's magic bytes (JPEG, PNG, WebP or GIF), limits size to 6 MB, stores the file under `data/uploads/`, and records who uploaded it. Items and reports can only use uploads that belong to the person submitting them.
@@ -85,3 +111,6 @@ The browser shrinks photos to at most 1600px (JPEG) before upload, and the raw b
 - A loan's length limit (`max_days`) applies to requests. Extensions may go past it, because the owner explicitly agrees to them.
 - Requests can be made up to a year ahead.
 - There is no item deletion in V1. Hiding is the humane equivalent, and it keeps history intact.
+- Circles are drawn from the existing community of people. With the demo person picker there is no one outside it to invite, so invite links aren't needed yet.
+- An item's audience is the same for every circle it's on. Per-circle rules, such as "open to Riverside, closed to Harbour", weren't asked for, and they would make "who can borrow this?" harder to answer at a glance.
+- Circles can't be deleted. When the last member leaves, the circle simply has no one in it, and its history is kept.

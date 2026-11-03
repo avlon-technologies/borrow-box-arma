@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { EyeOff } from 'lucide-react';
+import { EyeOff, Lock } from 'lucide-react';
 import { Avatar, ItemImage } from './ui.tsx';
-import { formatDay, relativeDay, diffDays } from '../format.ts';
+import { formatDay, diffDays } from '../format.ts';
 import type { ItemSummary } from '../types.ts';
 
 export function availabilityText(item: ItemSummary, today: string): { text: string; tone: 'good' | 'warn' | 'neutral' } {
@@ -12,8 +12,10 @@ export function availabilityText(item: ItemSummary, today: string): { text: stri
     if (a.overdue) return { text: 'Out · running late', tone: 'warn' };
     return { text: `Out until ${formatDay(a.backOn!)}`, tone: 'neutral' };
   }
-  if (a.nextBookedFrom && diffDays(today, a.nextBookedFrom) <= 7)
-    return { text: `Free until ${relativeDay(a.nextBookedFrom, today).replace(/^on /, '')}`, tone: 'good' };
+  if (a.nextBookedFrom && diffDays(today, a.nextBookedFrom) <= 7) {
+    const n = diffDays(today, a.nextBookedFrom);
+    return { text: n === 1 ? 'Free today · booked tomorrow' : `Free for ${n} days`, tone: 'good' };
+  }
   return { text: 'Available', tone: 'good' };
 }
 
@@ -40,6 +42,12 @@ export function ItemCard({ item, today, extra }: { item: ItemSummary; today: str
             <Avatar person={item.owner} size={22} />
             <span>{item.isMine ? 'Yours' : `${item.owner.firstName} · ${item.owner.neighbourhood}`}</span>
           </p>
+          {item.audience === 'circles' && !extra && (
+            <p className="item-card-circle">
+              <Lock size={13} aria-hidden />
+              <span>{item.circles.length ? item.circles.map((c) => c.name).join(' · ') : 'Circles only'}</span>
+            </p>
+          )}
           {extra}
         </div>
       </Link>

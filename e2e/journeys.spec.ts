@@ -267,13 +267,13 @@ test('two tabs can be two different people', async ({ browser }) => {
   const a = await ctx.newPage();
   await a.goto('/');
   await a.getByRole('button', { name: /Sam Whitfield/ }).click();
-  await expect(a.getByText('Good', { exact: false }).first()).toBeVisible();
+  await expect(a.locator('.hero .eyebrow')).toBeVisible();
   const b = await ctx.newPage();
   await b.goto('/');
   // New tab starts as the most recent person, then switches independently.
   await b.getByRole('button', { name: /Sam/ }).first().click();
   await b.getByRole('menuitem', { name: /Theo Martin/ }).click();
-  await expect(b.getByText('Good', { exact: false }).first()).toContainText('Theo');
+  await expect(b.locator('.hero .eyebrow')).toContainText('Theo');
   await a.reload();
-  await expect(a.getByText('Good', { exact: false }).first()).toContainText('Sam');
+  await expect(a.locator('.hero .eyebrow')).toContainText('Sam');
 });

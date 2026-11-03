@@ -9,11 +9,12 @@ import { EmptyState, ErrorState, SkeletonGrid, Button } from '../components/ui.t
 import type { ItemSummary } from '../types.ts';
 
 export function Explore() {
-  const { user, config, today, attention } = useSession();
+  const { user, config, today, attention, circles } = useSession();
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const category = params.get('category') ?? '';
   const availableNow = params.get('available') === 'now';
+  const circle = params.get('circle') ?? '';
   const [text, setText] = useState(q);
 
   // Debounce typing into the URL so search survives refresh and back/forward.
@@ -34,8 +35,9 @@ export function Explore() {
   if (q) query.set('q', q);
   if (category) query.set('category', category);
   if (availableNow) query.set('available', 'now');
+  if (circle) query.set('circle', circle);
   const { data, error, loading, reload } = useApi<ItemSummary[]>(`/items?${query}`);
-  const filtered = !!(q || category || availableNow);
+  const filtered = !!(q || category || availableNow || circle);
   const needs = attention.borrowing + attention.lending;
 
   return (
@@ -74,6 +76,24 @@ export function Explore() {
             </button>
           )}
         </label>
+        {circles.length > 0 && (
+          <div className="chips" role="group" aria-label="Shared by">
+            <button className={`chip ${!circle ? 'chip-on' : ''}`} aria-pressed={!circle} onClick={() => update({ circle: null })}>
+              All shelves
+            </button>
+            {circles.map((c) => (
+              <button
+                key={c.id}
+                className={`chip chip-circle ${circle === c.id ? 'chip-on' : ''}`}
+                aria-pressed={circle === c.id}
+                onClick={() => update({ circle: circle === c.id ? null : c.id })}
+              >
+                <i style={{ background: `hsl(${c.hue} 55% 55%)` }} aria-hidden />
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="chips" role="group" aria-label="Category">
           <button className={`chip ${!category ? 'chip-on' : ''}`} aria-pressed={!category} onClick={() => update({ category: null })}>
             Everything

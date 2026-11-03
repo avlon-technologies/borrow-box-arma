@@ -5,6 +5,9 @@ import { today, nowIso } from '../dates.ts';
 import { CATEGORIES, HOLDING_STATUSES, LIMITS, OPEN_STATUSES } from '../../shared/constants.ts';
 import { AppError, forbidden, invalid, notFound } from './errors.ts';
 import { publicUser, type PublicUser } from './users.ts';
+import {
+  type Audience, type CircleTag, VISIBLE_TO_SQL, applySharing, borrowAccess, isActiveMember, isInvolved, itemCirclesFor,
+} from './sharing.ts';
 
 const holding = HOLDING_STATUSES.map((s) => `'${s}'`).join(',');
 const open = OPEN_STATUSES.map((s) => `'${s}'`).join(',');
@@ -18,6 +21,10 @@ export const itemInput = z.object({
   careNotes: z.string().trim().max(LIMITS.noteLength).default(''),
   /** An upload id from POST /api/uploads, or the item's existing image url to keep it. */
   image: z.string().trim().max(300).nullable().optional(),
+  /** Who can ask to borrow it. Omit to keep the current setting. */
+  audience: z.enum(['everyone', 'circles']).optional(),
+  /** The full set of circles it's shared with. Omit to keep the current set. */
+  circleIds: z.array(z.string().min(1)).max(20).optional(),
 });
 export type ItemInput = z.infer<typeof itemInput>;
 
@@ -40,6 +47,10 @@ export interface ItemSummary {
   owner: PublicUser;
   isMine: boolean;
   availability: Availability;
+  /** Who can ask for it. */
+  audience: Audience;
+  /** Circles it's shared with that the viewer belongs to (all of them for the owner). */
+  circles: CircleTag[];
 }
 
 export interface Availability {
@@ -80,7 +91,7 @@ function availabilityFor(db: DB, itemId: string): Availability {
   };
 }
 
-function summarize(db: DB, row: any, viewerId: string): ItemSummary {
+export function summarizeItem(db: DB, row: any, viewerId: string): ItemSummary {
   return {
     id: row.id,
     title: row.title,
@@ -91,6 +102,8 @@ function summarize(db: DB, row: any, viewerId: string): ItemSummary {
     owner: publicUser(db, row.owner_id),
     isMine: row.owner_id === viewerId,
     availability: availabilityFor(db, row.id),
+    audience: row.audience,
+    circles: itemCirclesFor(db, viewerId, row),
   };
 }
 
@@ -99,11 +112,13 @@ export interface CatalogQuery {
   category?: string;
   availableNow?: boolean;
   owner?: string;
+  /** Only items shared with this circle (the viewer must be a member). */
+  circle?: string;
 }
 
 export function listCatalog(db: DB, viewerId: string, query: CatalogQuery): ItemSummary[] {
-  const where = ['i.hidden = 0'];
-  const params: any[] = [];
+  const where = ['i.hidden = 0', VISIBLE_TO_SQL];
+  const params: any[] = [viewerId, viewerId];
   if (query.q && query.q.trim()) {
     const terms = query.q.trim().toLowerCase().split(/\s+/).slice(0, 6);
     for (const term of terms) {
@@ -116,6 +131,11 @@ export function listCatalog(db: DB, viewerId: string, query: CatalogQuery): Item
     where.push('i.category = ?');
     params.push(query.category);
   }
+  if (query.circle) {
+    if (!isActiveMember(db, query.circle, viewerId)) return [];
+    where.push('EXISTS (SELECT 1 FROM item_circles ic WHERE ic.item_id = i.id AND ic.circle_id = ?)');
+    params.push(query.circle);
+  }
   if (query.owner) {
     where.push('i.owner_id = ?');
     params.push(query.owner);
@@ -127,7 +147,7 @@ export function listCatalog(db: DB, viewerId: string, query: CatalogQuery): Item
       ORDER BY i.created_at DESC`,
     ...params,
   );
-  let items = rows.map((r) => summarize(db, r, viewerId));
+  let items = rows.map((r) => summarizeItem(db, r, viewerId));
   if (query.availableNow) items = items.filter((i) => i.availability.state === 'available');
   return items;
 }
@@ -135,7 +155,7 @@ export function listCatalog(db: DB, viewerId: string, query: CatalogQuery): Item
 export function listOwnItems(db: DB, ownerId: string): (ItemSummary & { openRequests: number; activeLoan: boolean })[] {
   const rows = all(db, `SELECT * FROM items WHERE owner_id = ? ORDER BY hidden, created_at DESC`, ownerId);
   return rows.map((r) => ({
-    ...summarize(db, r, ownerId),
+    ...summarizeItem(db, r, ownerId),
     openRequests: (one<any>(db, `SELECT count(*) n FROM loans WHERE item_id = ? AND status = 'requested'`, r.id)?.n ?? 0) as number,
     activeLoan: !!one(db, `SELECT 1 FROM loans WHERE item_id = ? AND status IN ('borrowed','returning')`, r.id),
   }));
@@ -150,14 +170,14 @@ export function loadItem(db: DB, id: string) {
 export function getItemDetail(db: DB, viewerId: string, id: string) {
   const row = loadItem(db, id);
   const isOwner = row.owner_id === viewerId;
-  const involvement = one(
-    db,
-    `SELECT 1 FROM loans WHERE item_id = ? AND borrower_id = ? LIMIT 1`,
-    id,
-    viewerId,
-  );
-  if (row.hidden && !isOwner && !involvement) {
-    throw new AppError(404, 'item_resting', 'This item is resting right now — its owner isn’t lending it at the moment.');
+  const involvement = isInvolved(db, viewerId, id);
+  const access = isOwner ? ({ ok: true, via: null } as const) : borrowAccess(db, viewerId, row);
+  // People with a loan on the item can always open it, whatever changed since.
+  if (!isOwner && !involvement) {
+    if (!access.ok)
+      throw new AppError(404, 'item_circle_only', 'This item is only shared within a circle you’re not part of.');
+    if (row.hidden)
+      throw new AppError(404, 'item_resting', 'This item is resting right now — its owner isn’t lending it at the moment.');
   }
   const t = today();
   const bookingRows = all(
@@ -209,9 +229,10 @@ export function getItemDetail(db: DB, viewerId: string, id: string) {
   let canRequest: { ok: boolean; reason?: string } = { ok: true };
   if (isOwner) canRequest = { ok: false, reason: 'This is your item.' };
   else if (row.hidden) canRequest = { ok: false, reason: 'The owner has paused lending this item for now.' };
+  else if (!access.ok) canRequest = { ok: false, reason: access.reason };
 
   return {
-    ...summarize(db, row, viewerId),
+    ...summarizeItem(db, row, viewerId),
     description: row.description,
     pickupNotes: row.pickup_notes,
     careNotes: row.care_notes,
@@ -221,6 +242,8 @@ export function getItemDetail(db: DB, viewerId: string, id: string) {
     myOpenLoans,
     pendingRequests,
     canRequest,
+    /** The circle that lets this viewer ask for a circle-only item. */
+    viaCircle: access.ok ? access.via : null,
   };
 }
 
@@ -247,6 +270,7 @@ export function createItem(db: DB, actorId: string, input: unknown) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       id, actorId, data.title, data.description, data.category, imageUrl, data.maxDays, data.pickupNotes, data.careNotes, at, at,
     );
+    applySharing(db, actorId, { id, title: data.title }, { audience: data.audience, circleIds: data.circleIds });
   });
   return getItemDetail(db, actorId, id);
 }
@@ -263,6 +287,7 @@ export function updateItem(db: DB, actorId: string, id: string, input: unknown) 
         WHERE id = ?`,
       data.title, data.description, data.category, imageUrl, data.maxDays, data.pickupNotes, data.careNotes, nowIso(), id,
     );
+    applySharing(db, actorId, { id, title: data.title }, { audience: data.audience, circleIds: data.circleIds });
   });
   return getItemDetail(db, actorId, id);
 }

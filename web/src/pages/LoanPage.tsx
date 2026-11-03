@@ -1,16 +1,17 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, CalendarClock, CalendarPlus, Check, ClipboardList, History, MessageCircle, Package, Scale, Send, X,
+  AlertTriangle, CalendarClock, CalendarPlus, Check, ClipboardList, History, MessageCircle, Package, Scale, Send, Users, X,
 } from 'lucide-react';
 import { api, useAction, useApi } from '../api.ts';
 import { useSession } from '../session.tsx';
 import { useToast } from '../toast.tsx';
-import { addDays, diffDays, formatDay, formatDayWeekday, formatMoment, formatRange, nights, plural, timeAgo } from '../format.ts';
+import { addDays, diffDays, formatDay, formatDayWeekday, formatMoment, formatRange, nights, onDay, plural, timeAgo } from '../format.ts';
 import { Avatar, BackLink, Button, ErrorState, InlineError, ItemImage, Pill, Spinner } from '../components/ui.tsx';
 import { ReportFields, emptyReport, toReport, type ReportDraft } from '../components/ReportFields.tsx';
 import { STEPS, eventText, stage, statusLabel, stepIndex } from '../loanCopy.ts';
 import { NotFound } from './NotFound.tsx';
+import { CircleChip } from '../components/circles.tsx';
 import type { Action, LoanDetail, Report } from '../types.ts';
 
 export function LoanPage() {
@@ -168,6 +169,16 @@ function NextStep({ loan, setLoan, reload }: { loan: LoanDetail; setLoan: (l: Lo
           <Avatar person={loan.borrower} size={26} />
           <span>“{loan.note}”</span>
         </blockquote>
+      )}
+
+      {loan.role === 'owner' && loan.status === 'requested' && loan.via && !loan.via.borrowerStillMember && (
+        <p className="notice">
+          <Users size={18} aria-hidden />
+          <span>
+            {borrower} asked through {loan.via.name} and has since {loan.via.borrowerLeft?.how === 'removed' ? 'been removed from' : 'left'} the circle. The
+            request was made while they were a member, so it’s still yours to approve or decline.
+          </span>
+        </p>
       )}
 
       {/* Owner: what else wants these dates */}
@@ -710,6 +721,21 @@ function Details({ loan }: { loan: LoanDetail }) {
           <div>
             <dt>Care</dt>
             <dd>{loan.item.careNotes}</dd>
+          </div>
+        )}
+        {loan.via && (
+          <div>
+            <dt>Shared through</dt>
+            <dd>
+              <CircleChip circle={loan.via} link={loan.via.borrowerStillMember || loan.role === 'owner'} />
+            </dd>
+            {!loan.via.borrowerStillMember && loan.via.borrowerLeft && (
+              <dd className="muted small">
+                {loan.role === 'borrower' ? 'You' : loan.borrower.firstName}{' '}
+                {loan.via.borrowerLeft.how === 'removed' ? 'stopped being a member' : 'left the circle'} on {onDay(loan.via.borrowerLeft.at)}. This
+                was arranged while {loan.role === 'borrower' ? 'you were' : `${loan.borrower.firstName} was`} a member, so it carries on as agreed.
+              </dd>
+            )}
           </div>
         )}
         {loan.note && (
