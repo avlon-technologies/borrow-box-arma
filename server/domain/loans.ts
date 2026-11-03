@@ -644,7 +644,7 @@ export function getLoan(db: DB, viewerId: string, loanId: string) {
 
   // For the owner deciding on a request: what else wants these dates?
   let overlapping: { id: string; borrower: ReturnType<typeof publicUser>; startDate: string; endDate: string; status: string }[] = [];
-  if (role === 'owner' && (loan.status === 'requested' || pendingExt)) {
+  if (role === 'owner' && (['requested', 'approved', 'ready'].includes(loan.status) || pendingExt)) {
     const end = pendingExt ? pendingExt.new_end_date : loan.end_date;
     overlapping = all(
       db,

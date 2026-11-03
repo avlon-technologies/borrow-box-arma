@@ -1,8 +1,8 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type DB, one, run } from './db.ts';
+import { type DB, one, run, ROOT } from './db.ts';
 import { TIME_ZONE, nowIso, today } from './dates.ts';
 import { AppError, invalid, unauthenticated } from './domain/errors.ts';
 import { listPeople, publicUser } from './domain/users.ts';
@@ -17,21 +17,10 @@ export interface AppOptions {
   webDir?: string;
 }
 
-const COOKIE = 'bb_session';
-
 declare module 'express-serve-static-core' {
   interface Request {
     userId?: string;
   }
-}
-
-function parseCookies(header: string | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const part of (header ?? '').split(';')) {
-    const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
-  }
-  return out;
 }
 
 function sniffImage(buf: Buffer): { ext: string; mime: string } | null {
@@ -56,9 +45,14 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
     next();
   });
 
-  // Who is this? A session cookie maps to one of the community's people.
+  // Who is this? A bearer token maps to one of the community's people. Tokens
+  // live in the browser tab (sessionStorage), so two tabs can be two people.
+  const tokenOf = (req: Request) => {
+    const h = req.headers.authorization ?? '';
+    return h.startsWith('Bearer ') ? h.slice(7).trim() : undefined;
+  };
   app.use('/api', (req, _res, next) => {
-    const token = parseCookies(req.headers.cookie)[COOKIE];
+    const token = tokenOf(req);
     if (token) {
       const s = one<any>(db, `SELECT user_id FROM sessions WHERE token = ?`, token);
       if (s) req.userId = s.user_id;
@@ -124,6 +118,16 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
       limits: LIMITS,
     });
   });
+  // Photo credits for the seeded demo images (CC BY / BY-SA need attribution).
+  r.get('/credits', (_req, res) => {
+    const file = join(ROOT, 'server', 'seed', 'photos', 'CREDITS.md');
+    const rows = existsSync(file)
+      ? readFileSync(file, 'utf8').split(/\r?\n/).filter((l) => l.startsWith('| `'))
+          .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()))
+          .map(([file, subject, creator, license, source]) => ({ file: file.replace(/`/g, ''), subject, creator, license, source }))
+      : [];
+    res.json(rows);
+  });
   r.get('/people', (_req, res) => {
     res.json(listPeople(db));
   });
@@ -133,13 +137,11 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
       throw invalid('Choose someone from the list.');
     const token = randomBytes(24).toString('base64url');
     run(db, `INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)`, token, userId, nowIso());
-    res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
-    res.json({ user: publicUser(db, userId) });
+    res.json({ token, user: publicUser(db, userId) });
   });
   r.delete('/session', (req, res) => {
-    const token = parseCookies(req.headers.cookie)[COOKIE];
+    const token = tokenOf(req);
     if (token) run(db, `DELETE FROM sessions WHERE token = ?`, token);
-    res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
     res.json({ ok: true });
   });
   r.get('/me', (req, res) => {
@@ -187,8 +189,8 @@ export function createApp({ db, dataDir, webDir }: AppOptions) {
     res.json(items.getItemDetail(db, auth(req), req.params.id));
   });
   r.post('/items', mutation((req, u) => items.createItem(db, u, req.body), 201));
-  r.put('/items/:id', mutation((req, u) => items.updateItem(db, u, req.params.id, req.body)));
-  r.post('/items/:id/visibility', mutation((req, u) => items.setHidden(db, u, req.params.id, req.body?.hidden)));
+  r.put('/items/:id', mutation((req, u) => items.updateItem(db, u, req.params.id as string, req.body)));
+  r.post('/items/:id/visibility', mutation((req, u) => items.setHidden(db, u, req.params.id as string, req.body?.hidden)));
 
   // ---- loans
   r.get('/loans', (req, res) => {

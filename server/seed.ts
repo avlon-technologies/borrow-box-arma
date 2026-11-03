@@ -49,10 +49,10 @@ const itemsToSeed: SeedItem[] = [
     description: 'Reliable mechanical sewing machine, perfect for hems, curtains and costume emergencies. Comes with spare bobbins and needles.',
     pickup: 'Pickup from my place on Riverside; I can give a five-minute threading lesson.',
     care: 'Please use the dust cover and keep the foot pedal cable untangled.' },
-  { key: 'ladder', owner: 'maya', title: 'Extension ladder (6 m)', category: 'Home & Garden', maxDays: 3, photo: ['ladder.jpg'],
-    description: 'Aluminium extension ladder for gutters, lights and that one high window.',
-    pickup: 'You’ll need a car with roof bars or a friend — it doesn’t fold.',
-    care: 'Hose off any mud before bringing it back.' },
+  { key: 'ladder', owner: 'maya', title: 'Wooden step ladder', category: 'Home & Garden', maxDays: 3, photo: ['ladder.jpg'],
+    description: 'Sturdy six-step wooden ladder for painting ceilings, hanging lights and reaching that one high shelf.',
+    pickup: 'It folds flat and fits in most hatchbacks with the seats down.',
+    care: 'Wipe off any paint splashes before bringing it back.' },
   { key: 'tent', owner: 'sam', title: 'Four-person camping tent', category: 'Outdoors', maxDays: 10, photo: ['tent.jpg'],
     description: 'Roomy dome tent that pitches in ten minutes. Includes footprint, pegs and a mallet.',
     pickup: 'Garage on Elm Street — text me through BorrowBox and I’ll open it up.',
@@ -61,10 +61,10 @@ const itemsToSeed: SeedItem[] = [
     description: 'Stable 10’6” inflatable SUP with paddle, pump, leash and a backpack to carry it all.',
     pickup: 'Elm Street, mornings before 9 or after 5.',
     care: 'Rinse with fresh water and let it dry before rolling.' },
-  { key: 'trailer', owner: 'sam', title: 'Kids’ bike trailer', category: 'Kids', maxDays: 7, photo: ['bike-trailer.jpg'],
-    description: 'Two-seat bike trailer that also converts to a stroller. Fits most adult bikes with the included hitch.',
+  { key: 'trailer', owner: 'sam', title: 'Bike cargo trailer', category: 'Outdoors', maxDays: 7, photo: ['bike-trailer.jpg'],
+    description: 'Sturdy two-wheel cargo trailer that hitches to most adult bikes. Hauls groceries, camping gear or a week of farmers-market finds.',
     pickup: 'I’ll help you fit the hitch the first time.',
-    care: 'Fold it gently — the frame clips are a bit fiddly.' },
+    care: 'Check the hitch pin is clipped in before every ride.' },
   { key: 'backpack', owner: 'sam', title: '65 L hiking backpack', category: 'Outdoors', maxDays: 14, photo: ['backpack.jpg'],
     description: 'Adjustable trekking pack with rain cover. Has done the West Coast Trail twice.',
     pickup: 'Anytime — just message first.',
@@ -73,26 +73,26 @@ const itemsToSeed: SeedItem[] = [
     description: '1080p projector with a 100” pull-up screen and a little Bluetooth speaker. Backyard movie nights, sorted.',
     pickup: 'Maple Court, unit 4. Weeknights are easiest.',
     care: 'Let it cool down before packing it in the case.' },
-  { key: 'telescope', owner: 'priya', title: 'Beginner telescope', category: 'Hobbies', maxDays: 7, photo: ['telescope.jpg'],
-    description: '130 mm reflector on a sturdy mount. Saturn’s rings on a clear night will change your life.',
+  { key: 'telescope', owner: 'priya', title: 'Tabletop telescope', category: 'Hobbies', maxDays: 7, photo: ['telescope.jpg'],
+    description: 'Compact telescope on a tripod — light enough for the balcony, strong enough for Saturn’s rings on a clear night.',
     pickup: 'I’ll show you how to align the finder scope.',
     care: 'Keep the lens caps on whenever it’s not in use.' },
   { key: 'games', owner: 'priya', title: 'Board game night box', category: 'Hobbies', maxDays: 14, photo: ['board-games.jpg'],
     description: 'Six crowd-pleasers for 2–6 players, from quick party games to a long strategy evening.',
     pickup: 'Maple Court, any evening.',
     care: 'Please count the pieces back in — there’s a checklist in the lid.' },
-  { key: 'icecream', owner: 'priya', title: 'Ice cream maker', category: 'Kitchen', maxDays: 5, photo: ['ice-cream-maker.jpg', 'waffle-iron.jpg'],
-    description: 'Freeze the bowl overnight and you’ll have soft-serve in 25 minutes. Recipe card included.',
-    pickup: 'The bowl is already in my freezer — grab it frozen and you can start straight away.',
-    care: 'Hand-wash the bowl and paddle.' },
-  { key: 'tables', owner: 'theo', title: 'Folding party tables (×3)', category: 'Party', maxDays: 3, photo: ['party-tables.jpg'],
-    description: 'Three 6-ft folding tables and twelve folding chairs. Seats a whole street party.',
+  { key: 'waffles', owner: 'priya', title: 'Belgian waffle iron', category: 'Kitchen', maxDays: 5, photo: ['waffle-iron.jpg'],
+    description: 'Makes thick, fluffy Belgian waffles in four minutes. Comes with my grandmother’s batter recipe card.',
+    pickup: 'Maple Court, any evening — I’ll throw in a bag of pearl sugar.',
+    care: 'Let it cool, then wipe the plates with a damp cloth (no soap, they’re seasoned).' },
+  { key: 'tables', owner: 'theo', title: 'Garden party set', category: 'Party', maxDays: 3, photo: ['party-tables.jpg'],
+    description: 'Three round tables, twelve white folding chairs and two big sun umbrellas. Seats a whole street party.',
     pickup: 'Harbour Lane — you’ll want a van or two trips in a hatchback.',
     care: 'Wipe them down after use, please.' },
-  { key: 'washer', owner: 'theo', title: 'Pressure washer', category: 'Home & Garden', maxDays: 2, photo: ['pressure-washer.jpg', 'circular-saw.jpg'],
-    description: 'Electric pressure washer with patio-cleaner attachment. Decks and driveways look brand new.',
+  { key: 'washer', owner: 'theo', title: 'Pressure washer', category: 'Home & Garden', maxDays: 2, photo: ['pressure-washer.jpg'],
+    description: 'Gas-powered pressure washer with a patio-cleaner attachment. Decks and driveways look brand new.',
     pickup: 'Harbour Lane, weekend mornings.',
-    care: 'Drain the water before storing.' },
+    care: 'Return it with a little fuel in the tank and drain the water line.' },
 ];
 
 /** Move the seed clock to `offset` days from the real today, at a daytime hour in the community. */
@@ -213,19 +213,19 @@ function seedStory(db: DB, uploadDir: string) {
   L.markReady(db, 'theo', id, {});
   L.confirmPickup(db, 'sam', id, {});
   at(-33, 18);
-  L.startReturn(db, 'sam', id, { report: good('Wiped down, all three tables and twelve chairs.') });
+  L.startReturn(db, 'sam', id, { report: good('Wiped down — all three tables, twelve chairs and both umbrellas.') });
   at(-33, 21);
   L.confirmReturn(db, 'theo', id, { report: { ...good('All here, thanks Sam!'), agrees: true } });
 
   // 8. Sam is bringing Maya's ladder back — Maya needs to confirm.
   at(-5);
-  id = req('sam', 'ladder', -3, -1, 'Clearing the gutters before the leaves come down.');
+  id = req('sam', 'ladder', -3, -1, 'Painting the hallway ceiling.');
   L.approve(db, 'maya', id, {});
   at(-3);
   L.markReady(db, 'maya', id, {});
   L.confirmPickup(db, 'sam', id, {});
   at(-1, 22);
-  L.startReturn(db, 'sam', id, { report: good('Back against your side fence. Hosed off.') });
+  L.startReturn(db, 'sam', id, { report: good('Back against your side fence. No paint on it, promise.') });
 
   // 9. Theo has paused lending the pressure washer, but Priya's reservation stands.
   at(-6);
@@ -236,7 +236,7 @@ function seedStory(db: DB, uploadDir: string) {
 
   // 10. Theo has Sam's bike trailer and asked for a few more days.
   at(-4);
-  id = req('theo', 'trailer', -3, 1, 'Visiting grandparents with the twins.');
+  id = req('theo', 'trailer', -3, 1, 'Hauling camping gear to the cottage.');
   L.approve(db, 'sam', id, {});
   at(-3);
   L.markReady(db, 'sam', id, {});

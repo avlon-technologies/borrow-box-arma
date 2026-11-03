@@ -33,6 +33,7 @@ export async function makeHarness(opts: { seed?: boolean } = {}): Promise<Harnes
     const agent = request.agent(app);
     const res = await agent.post('/api/session').send({ userId });
     if (res.status !== 200) throw new Error(`login failed for ${userId}: ${res.status}`);
+    agent.set('Authorization', `Bearer ${res.body.token}`);
     return agent;
   };
   return {

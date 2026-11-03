@@ -49,6 +49,8 @@ export interface Availability {
   backOn: string | null;
   /** If out and the loan is late. */
   overdue: boolean;
+  /** The borrower has started bringing it back. */
+  returning: boolean;
   /** Next reservation starting after today, if any. */
   nextBookedFrom: string | null;
 }
@@ -73,6 +75,7 @@ function availabilityFor(db: DB, itemId: string): Availability {
     state: current ? 'out' : 'available',
     backOn: current ? current.end_date : null,
     overdue: !!current && current.end_date < t,
+    returning: current?.status === 'returning',
     nextBookedFrom: next ? next.start_date : null,
   };
 }
